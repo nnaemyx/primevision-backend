@@ -80,6 +80,19 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       res.status(403).json({ message: 'Account suspended. Contact support.' });
       return;
     }
+    if (!user.isVerified) {
+      const otp = generateOTP();
+      user.otp = otp;
+      user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      await user.save();
+      await sendOTPEmail(user.name, user.email, otp);
+      res.status(403).json({
+        message: 'Email not verified. A new code has been sent to your email.',
+        requiresVerification: true,
+        userId: user._id,
+      });
+      return;
+    }
     // Log login
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
     const userAgent = req.headers['user-agent'] || '';

@@ -30,14 +30,14 @@ app.post('/api/chat/message', async (req, res) => {
     const { name, email, message, userId } = req.body;
     const ChatMessage = (await import('./models/ChatMessage')).default;
     const resend = (await import('./config/resend')).default;
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@crestlinetrades.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@primevisiontrades.com';
 
     // Save to DB
     const chat = await ChatMessage.create({ name, email, message, user: userId || undefined });
 
     // Notify admin by email
     await resend.emails.send({
-      from: 'CrestlineTrades Chat <noreply@crestlinetrades.com>',
+      from: process.env.FROM_EMAIL || 'PrimeVision Trades Chat <noreply@primevisiontrades.com>',
       to: adminEmail,
       subject: `💬 New Support Message from ${name}`,
       html: `<div style="font-family:sans-serif;background:#0e0e52;color:#fff;padding:24px;border-radius:12px">
@@ -84,9 +84,9 @@ app.post('/api/admin/chats/:id/reply', async (req, res) => {
 
     // Send reply email to user
     await resend.emails.send({
-      from: 'CrestlineTrades Support <noreply@crestlinetrades.com>',
+      from: process.env.FROM_EMAIL || 'PrimeVision Trades Support <noreply@primevisiontrades.com>',
       to: chat.email,
-      subject: 'Reply from CrestlineTrades Support',
+      subject: 'Reply from PrimeVision Trades Support',
       html: `<div style="font-family:sans-serif;background:#0e0e52;color:#fff;padding:24px;border-radius:12px">
         <h3 style="color:#e9d758">Support Reply</h3>
         <p>Hi ${chat.name},</p>
@@ -95,7 +95,7 @@ app.post('/api/admin/chats/:id/reply', async (req, res) => {
         <p style="color:#cdcacc">Our response:</p>
         <div style="background:#150578;padding:16px;border-radius:8px">${reply}</div>
         <hr style="border-color:#150578;margin:20px 0"/>
-        <p style="color:#cdcacc;font-size:12px">CrestlineTrades Support Team</p>
+        <p style="color:#cdcacc;font-size:12px">PrimeVision Trades Support Team</p>
       </div>`,
     });
 
@@ -129,6 +129,6 @@ app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().to
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`CrestlineTrades API running on port ${PORT}`));
+app.listen(PORT, () => console.log(`PrimeVision Trades API running on port ${PORT}`));
 
 export default app;
