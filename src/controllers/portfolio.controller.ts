@@ -12,11 +12,11 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
     const totalDeposited = deposits.reduce((acc, t) => acc + t.amount, 0);
     const pnlPercent = totalDeposited > 0 ? (totalPnl / totalDeposited) * 100 : 0;
 
-    // Mock distribution
+    // Distribution is manually managed by the user
     const distribution = {
-      stocks: user.balance * 0.57,
-      futures: user.balance * 0.034,
-      crypto: user.balance * 0.097,
+      stocks: 0,
+      futures: 0,
+      crypto: 0,
     };
 
     res.json({ balance: user.balance, pnlValue: totalPnl, pnlPercent, distribution });

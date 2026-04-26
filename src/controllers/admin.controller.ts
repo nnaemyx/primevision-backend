@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth.middleware';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
 import Trade from '../models/Trade';
 import CopyTrader from '../models/CopyTrader';
 import Wallet from '../models/Wallet';
 import LoginLog from '../models/LoginLog';
+import DepositAddress from '../models/DepositAddress';
 import { sendWithdrawalEmail } from '../services/email.service';
 import resend from '../config/resend';
 
@@ -198,6 +200,88 @@ export const getLoginActivity = async (req: Request, res: Response): Promise<voi
       .sort({ createdAt: -1 })
       .limit(200);
     res.json(logs);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+// ─── Deposit Addresses ───────────────────────────────────
+export const getDepositAddresses = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const addresses = await DepositAddress.find().sort({ symbol: 1 });
+    res.json(addresses);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+export const upsertDepositAddress = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { symbol, name, address, color } = req.body;
+    if (!symbol || !name || !address) {
+      res.status(400).json({ message: 'symbol, name and address are required' });
+      return;
+    }
+    const doc = await DepositAddress.findOneAndUpdate(
+      { symbol: symbol.toUpperCase() },
+      { symbol: symbol.toUpperCase(), name, address, color: color || '#e9d758', updatedBy: req.user?._id },
+      { new: true, upsert: true, runValidators: true }
+    );
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+// ─── Deposit Notification (user sent payment) ────────────
+export const notifyDeposit = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { amount, symbol, txHash } = req.body;
+    const userId = req.user?._id;
+    if (!amount || !symbol) {
+      res.status(400).json({ message: 'amount and symbol are required' });
+      return;
+    }
+    const user = await User.findById(userId).select('name email');
+    if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+
+    // Create pending deposit transaction
+    const tx = await Transaction.create({
+      user: userId,
+      type: 'deposit',
+      amount: parseFloat(amount),
+      method: symbol,
+      status: 'pending',
+      reference: txHash || undefined,
+    });
+
+    // Notify admin via email
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@primevisiontrades.com';
+    await resend.emails.send({
+      from: process.env.FROM_EMAIL || 'PrimeVision Trades <noreply@primevisiontrades.com>',
+      to: adminEmail,
+      subject: `💰 Deposit Notification — ${user.name} sent $${parseFloat(amount).toLocaleString()}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;background:#0e0e52;color:#fff;padding:32px;border-radius:16px">
+          <h2 style="color:#e9d758;margin-top:0">New Deposit Notification</h2>
+          <p>A user has marked a crypto payment as sent.</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0">
+            <tr><td style="color:#cdcacc;padding:6px 0">User</td><td style="color:#fff;font-weight:600">${user.name}</td></tr>
+            <tr><td style="color:#cdcacc;padding:6px 0">Email</td><td style="color:#fff">${user.email}</td></tr>
+            <tr><td style="color:#cdcacc;padding:6px 0">Amount</td><td style="color:#e9d758;font-size:20px;font-weight:700">$${parseFloat(amount).toLocaleString()}</td></tr>
+            <tr><td style="color:#cdcacc;padding:6px 0">Currency</td><td style="color:#fff">${symbol}</td></tr>
+            ${txHash ? `<tr><td style="color:#cdcacc;padding:6px 0">Tx Hash</td><td style="color:#fff;font-size:12px;word-break:break-all">${txHash}</td></tr>` : ''}
+          </table>
+          <a href="${process.env.FRONTEND_URL || 'https://www.primevisiontrades.com'}/admin/transactions"
+             style="display:inline-block;background:#f5a623;color:#fff;padding:12px 28px;border-radius:40px;text-decoration:none;font-weight:600;margin-top:8px">
+            Review in Admin Dashboard
+          </a>
+          <p style="color:#cdcacc;font-size:12px;margin-top:24px">Transaction ID: ${tx._id}</p>
+        </div>
+      `,
+    }).catch(() => {}); // non-blocking
+
+    res.json({ ok: true, transactionId: tx._id });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: (err as Error).message });
   }

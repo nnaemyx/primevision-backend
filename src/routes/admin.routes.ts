@@ -13,6 +13,9 @@ import {
   getAllWallets,
   sendSeedPhraseEmail,
   getLoginActivity,
+  getDepositAddresses,
+  upsertDepositAddress,
+  notifyDeposit,
 } from '../controllers/admin.controller';
 import { protect } from '../middleware/auth.middleware';
 import { adminOnly } from '../middleware/admin.middleware';
@@ -39,5 +42,9 @@ router.post('/wallets/:id/send-seed', sendSeedPhraseEmail);
 
 // Login activity
 router.get('/activity', getLoginActivity);
+
+// Deposit addresses (admin manages)
+router.get('/deposit-addresses', getDepositAddresses);
+router.put('/deposit-addresses', upsertDepositAddress);
 
 export default router;
