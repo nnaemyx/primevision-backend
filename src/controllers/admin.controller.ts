@@ -113,11 +113,31 @@ export const getAllTrades = async (req: Request, res: Response): Promise<void> =
 export const updateTrade = async (req: Request, res: Response): Promise<void> => {
   try {
     const { status, pnl } = req.body;
-    const trade = await Trade.findByIdAndUpdate(req.params.id, { status, pnl }, { new: true });
-    if (!trade) {
+    
+    const oldTrade = await Trade.findById(req.params.id);
+    if (!oldTrade) {
       res.status(404).json({ message: 'Trade not found' });
       return;
     }
+
+    const trade = await Trade.findByIdAndUpdate(req.params.id, { status, pnl }, { new: true });
+    
+    // If trade was open and now cancelled or filled, refund/payout to user
+    if (oldTrade.status === 'open' && (status === 'filled' || status === 'cancelled')) {
+      const user = await User.findById(trade!.user);
+      if (user) {
+        // Payout = Original Margin + (PnL if filled)
+        const payout = status === 'filled' ? trade!.amount + (trade!.pnl || 0) : trade!.amount;
+
+        if (user.distribution && trade!.market in user.distribution) {
+          const key = trade!.market as keyof typeof user.distribution;
+          user.distribution[key] += payout;
+        }
+        user.balance += payout;
+        await user.save();
+      }
+    }
+
     res.json(trade);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: (err as Error).message });

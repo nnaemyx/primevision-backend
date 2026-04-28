@@ -13,7 +13,7 @@ export const getBalance = async (req: AuthRequest, res: Response): Promise<void>
     const pnlPercent = totalDeposited > 0 ? (totalPnl / totalDeposited) * 100 : 0;
 
     // Distribution is manually managed by the user
-    const distribution = {
+    const distribution = user.distribution || {
       stocks: 0,
       futures: 0,
       crypto: 0,
@@ -45,6 +45,30 @@ export const getTransactionHistory = async (req: AuthRequest, res: Response): Pr
       .limit(20)
       .lean();
     res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+export const allocatePortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { stocks, futures, crypto } = req.body;
+    
+    // Convert to numbers and default to 0 if invalid
+    const distStocks = Number(stocks) || 0;
+    const distFutures = Number(futures) || 0;
+    const distCrypto = Number(crypto) || 0;
+    
+    const user = req.user!;
+    user.distribution = {
+      stocks: distStocks,
+      futures: distFutures,
+      crypto: distCrypto,
+    };
+    
+    await user.save();
+    
+    res.json({ message: 'Allocation updated successfully', distribution: user.distribution });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: (err as Error).message });
   }

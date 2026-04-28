@@ -11,8 +11,10 @@ export const executeTrade = async (req: AuthRequest, res: Response): Promise<voi
       res.status(404).json({ message: 'User not found' });
       return;
     }
-    if (user.balance < amount) {
-      res.status(400).json({ message: 'Insufficient balance' });
+    // Get allocated balance for the specific market
+    const marketBalance = user.distribution?.[market as keyof typeof user.distribution] || 0;
+    if (marketBalance < amount) {
+      res.status(400).json({ message: `Insufficient allocated balance for ${market}` });
       return;
     }
     const trade = await Trade.create({
@@ -28,9 +30,15 @@ export const executeTrade = async (req: AuthRequest, res: Response): Promise<voi
       takeProfit,
       leverage,
       lockingPeriod,
-      status: type === 'market' ? 'filled' : 'open',
+      status: 'open',
       executionPrice: type === 'market' ? price : undefined,
     });
+    // Deduct from both market-specific allocation and main balance
+    if (user.distribution && market in user.distribution) {
+      // TypeScript safety, assert key
+      const key = market as keyof typeof user.distribution;
+      user.distribution[key] -= amount;
+    }
     user.balance -= amount;
     await user.save();
     res.status(201).json(trade);
@@ -78,8 +86,16 @@ export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void
     }
     trade.status = 'cancelled';
     await trade.save();
-    // Refund
-    await User.findByIdAndUpdate(req.user?._id, { $inc: { balance: trade.amount } });
+    // Refund to both market-specific allocation and main balance
+    const user = await User.findById(req.user?._id);
+    if (user) {
+      if (user.distribution && trade.market in user.distribution) {
+        const key = trade.market as keyof typeof user.distribution;
+        user.distribution[key] += trade.amount;
+      }
+      user.balance += trade.amount;
+      await user.save();
+    }
     res.json(trade);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: (err as Error).message });

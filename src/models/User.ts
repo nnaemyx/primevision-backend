@@ -16,6 +16,11 @@ export interface IUser extends Document {
   resetTokenExpiry?: Date;
   createdAt: Date;
   updatedAt: Date;
+  distribution?: {
+    stocks: number;
+    futures: number;
+    crypto: number;
+  };
   comparePassword(password: string): Promise<boolean>;
 }
 
@@ -33,6 +38,11 @@ const UserSchema = new Schema<IUser>(
     otpExpiry: { type: Date },
     resetToken: { type: String },
     resetTokenExpiry: { type: Date },
+    distribution: {
+      stocks: { type: Number, default: 0 },
+      futures: { type: Number, default: 0 },
+      crypto: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );
