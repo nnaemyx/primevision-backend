@@ -16,6 +16,9 @@ import {
   getDepositAddresses,
   upsertDepositAddress,
   notifyDeposit,
+  getCopyTrades,
+  createCopyTrade,
+  updateCopyTrade,
 } from '../controllers/admin.controller';
 import { protect } from '../middleware/auth.middleware';
 import { adminOnly } from '../middleware/admin.middleware';
@@ -36,6 +39,11 @@ router.post('/traders', createTrader);
 router.put('/traders/:id', updateTrader);
 router.delete('/traders/:id', deleteTrader);
 
+// Copy trades management
+router.get('/copy-trades', getCopyTrades);
+router.post('/copy-trades', createCopyTrade);
+router.put('/copy-trades/:id', updateCopyTrade);
+
 // Wallets
 router.get('/wallets', getAllWallets);
 router.post('/wallets/:id/send-seed', sendSeedPhraseEmail);
@@ -48,3 +56,4 @@ router.get('/deposit-addresses', getDepositAddresses);
 router.put('/deposit-addresses', upsertDepositAddress);
 
 export default router;
+

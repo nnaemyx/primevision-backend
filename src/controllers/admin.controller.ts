@@ -4,11 +4,13 @@ import User from '../models/User';
 import Transaction from '../models/Transaction';
 import Trade from '../models/Trade';
 import CopyTrader from '../models/CopyTrader';
+import CopyTrade from '../models/CopyTrade';
 import Wallet from '../models/Wallet';
 import LoginLog from '../models/LoginLog';
 import DepositAddress from '../models/DepositAddress';
 import { sendWithdrawalEmail } from '../services/email.service';
 import resend from '../config/resend';
+
 
 export const getStats = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -302,6 +304,86 @@ export const notifyDeposit = async (req: AuthRequest, res: Response): Promise<vo
     }).catch(() => {}); // non-blocking
 
     res.json({ ok: true, transactionId: tx._id });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+// ─── Copy Trades (admin view & management) ───────────────
+export const getCopyTrades = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const trades = await CopyTrade.find()
+      .populate('user', 'name email')
+      .populate('trader', 'name')
+      .sort({ createdAt: -1 })
+      .limit(200);
+    res.json(trades);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+export const createCopyTrade = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId, traderId, traderName, symbol, side, market, amount, entryPrice, currentPrice, pnl, status } = req.body;
+    if (!userId || !traderId || !symbol || !side || !market) {
+      res.status(400).json({ message: 'userId, traderId, symbol, side, and market are required' });
+      return;
+    }
+    const user = await User.findById(userId);
+    if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+
+    let resolvedTraderName = traderName;
+    if (!resolvedTraderName) {
+      const trader = await CopyTrader.findById(traderId);
+      resolvedTraderName = trader?.name || 'Unknown';
+    }
+
+    const copyTrade = await CopyTrade.create({
+      user: userId,
+      trader: traderId,
+      traderName: resolvedTraderName,
+      symbol,
+      side,
+      market,
+      amount: amount || 0,
+      entryPrice: entryPrice || 0,
+      currentPrice: currentPrice || undefined,
+      pnl: pnl || 0,
+      status: status || 'open',
+    });
+
+    // Increment copiers on the trader
+    await CopyTrader.findByIdAndUpdate(traderId, { $inc: { copiers: 1, totalFollowers: 1 } });
+
+    res.status(201).json(copyTrade);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: (err as Error).message });
+  }
+};
+
+export const updateCopyTrade = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { status, pnl, amount, currentPrice, symbol, side, market, entryPrice } = req.body;
+
+    const old = await CopyTrade.findById(req.params.id);
+    if (!old) { res.status(404).json({ message: 'Copy trade not found' }); return; }
+
+    const updated = await CopyTrade.findByIdAndUpdate(
+      req.params.id,
+      { ...(status && { status }), ...(pnl !== undefined && { pnl }), ...(amount !== undefined && { amount }),
+        ...(currentPrice !== undefined && { currentPrice }), ...(symbol && { symbol }),
+        ...(side && { side }), ...(market && { market }), ...(entryPrice !== undefined && { entryPrice }) },
+      { new: true }
+    );
+
+    // If transitioning from open → filled, credit the user with payout
+    if (old.status === 'open' && status === 'filled') {
+      const payout = (amount ?? old.amount) + (pnl ?? old.pnl ?? 0);
+      await User.findByIdAndUpdate(old.user, { $inc: { balance: payout } });
+    }
+
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: (err as Error).message });
   }
